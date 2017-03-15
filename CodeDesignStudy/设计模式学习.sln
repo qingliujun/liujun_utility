@@ -1,0 +1,33 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 2013
+VisualStudioVersion = 12.0.31101.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "SimpleFactory", "SimpleFactory\SimpleFactory.vcxproj", "{7347FCB8-F257-4538-A5F3-58AF47EEE87C}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Strategy", "Strategy\Strategy.vcxproj", "{2C9B2681-518A-4CAF-AE23-E51D41C3845D}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{306DDF0F-E42E-4176-B355-803F43435010}"
+	ProjectSection(SolutionItems) = preProject
+		说明文件.txt = 说明文件.txt
+	EndProjectSection
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Win32 = Debug|Win32
+		Release|Win32 = Release|Win32
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{7347FCB8-F257-4538-A5F3-58AF47EEE87C}.Debug|Win32.ActiveCfg = Debug|Win32
+		{7347FCB8-F257-4538-A5F3-58AF47EEE87C}.Debug|Win32.Build.0 = Debug|Win32
+		{7347FCB8-F257-4538-A5F3-58AF47EEE87C}.Release|Win32.ActiveCfg = Release|Win32
+		{7347FCB8-F257-4538-A5F3-58AF47EEE87C}.Release|Win32.Build.0 = Release|Win32
+		{2C9B2681-518A-4CAF-AE23-E51D41C3845D}.Debug|Win32.ActiveCfg = Debug|Win32
+		{2C9B2681-518A-4CAF-AE23-E51D41C3845D}.Debug|Win32.Build.0 = Debug|Win32
+		{2C9B2681-518A-4CAF-AE23-E51D41C3845D}.Release|Win32.ActiveCfg = Release|Win32
+		{2C9B2681-518A-4CAF-AE23-E51D41C3845D}.Release|Win32.Build.0 = Release|Win32
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal
