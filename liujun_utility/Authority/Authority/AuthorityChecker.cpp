@@ -1,9 +1,159 @@
-#include "stdafx.h"
+#include <comdef.h>
+#include <taskschd.h>
+//#include <VersionHelpers.h>
 #include <Shellapi.h>
-#include <TlHelp32.h>
 #include "AuthorityChecker.h"
 
+# pragma comment(lib, "taskschd.lib")
+
+#ifdef _DEBUG
+#define DO( action )		\
+	if( FAILED( action ) )	\
+			    {			\
+		assert( FALSE );	\
+        return FALSE;		\
+			    }
+#else
+#define DO( action )		\
+	if( FAILED( action ) )	\
+				    {			\
+        return FALSE;		\
+				    }
+#endif
+
+class ITaskServiceHelper
+{
+public:
+	ITaskServiceHelper()		{ p = NULL; }
+	~ITaskServiceHelper()		{ /*if (p) p->Release();*/ }
+
+	ITaskService * p;
+};
+
+class ITaskFolderHelper
+{
+public:
+	ITaskFolderHelper()			{ p = NULL; }
+	~ITaskFolderHelper()		{ /*if (p) p->Release();*/ }
+
+	ITaskFolder * p;
+};
+
+class ITaskDefinitionHelper
+{
+public:
+	ITaskDefinitionHelper()		{ p = NULL; }
+	~ITaskDefinitionHelper()	{ /*if (p) p->Release();*/ }
+
+	ITaskDefinition * p;
+};
+
+class IRegistrationInfoHelper
+{
+public:
+	IRegistrationInfoHelper()	{ p = NULL; }
+	~IRegistrationInfoHelper()	{ /*if (p) p->Release();*/ }
+
+	IRegistrationInfo * p;
+};
+
+class IPrincipalHelper
+{
+public:
+	IPrincipalHelper()			{ p = NULL; }
+	~IPrincipalHelper()			{ /*if (p) p->Release();*/ }
+
+	IPrincipal * p;
+};
+
+class ITaskSettingsHelper
+{
+public:
+	ITaskSettingsHelper()		{ p = NULL; }
+	~ITaskSettingsHelper()		{ /*if (p) p->Release();*/ }
+
+	ITaskSettings * p;
+};
+
+class ITriggerCollectionHelper
+{
+public:
+	ITriggerCollectionHelper()	{ p = NULL; }
+	~ITriggerCollectionHelper()	{/* if (p) p->Release();*/ }
+
+	ITriggerCollection * p;
+};
+
+class ITriggerHelper
+{
+public:
+	ITriggerHelper()			{ p = NULL; }
+	~ITriggerHelper()			{ /*if (p) p->Release();*/ }
+
+	ITrigger * p;
+};
+
+class IRegistrationTriggerHelper
+{
+public:
+	IRegistrationTriggerHelper(){ p = NULL; }
+	~IRegistrationTriggerHelper(){ /*if (p) p->Release();*/ }
+
+	IRegistrationTrigger * p;
+};
+
+class IActionCollectionHelper
+{
+public:
+	IActionCollectionHelper()	{ p = NULL; }
+	~IActionCollectionHelper()	{ /*if (p) p->Release();*/ }
+
+	IActionCollection * p;
+};
+
+class IActionHelper
+{
+public:
+	IActionHelper()				{ p = NULL; }
+	~IActionHelper()			{ /*if (p) p->Release();*/ }
+
+	IAction * p;
+};
+
+class IExecActionHelper
+{
+public:
+	IExecActionHelper()			{ p = NULL; }
+	~IExecActionHelper()		{ /*if (p) p->Release()*/; }
+
+	IExecAction * p;
+};
+
+class IRegisteredTaskHelper
+{
+public:
+	IRegisteredTaskHelper()		{ p = NULL; }
+	~IRegisteredTaskHelper()	{ /*if (p) p->Release();*/ }
+
+	IRegisteredTask * p;
+};
+
+
 CAuthorityChecker*	CAuthorityChecker::m_pInstance = NULL;
+
+BOOL CAuthorityChecker::IsVistaOrLater()
+{
+	//return IsWindowsVistaOrGreater();
+
+	OSVERSIONINFO osver;
+	osver.dwOSVersionInfoSize = sizeof(OSVERSIONINFO);
+	if (::GetVersionEx(&osver) &&
+		osver.dwPlatformId == VER_PLATFORM_WIN32_NT &&
+		(osver.dwMajorVersion >= 6))
+		return TRUE;
+
+	return FALSE;
+}
 
 int CAuthorityChecker::IsRunAsAdmin(DWORD dwProcessId)
 {
@@ -64,7 +214,7 @@ int CAuthorityChecker::IsRunAsAdmin(DWORD dwProcessId)
 }
 
 
-bool CAuthorityChecker::UserRunAsAdmin(const std::tstring& strPath)
+BOOL CAuthorityChecker::UserRunAsAdmin(const HWND hWnd, const std::tstring& strPath, const std::tstring& strParameters, const std::tstring& strDirectory)
 {
 	std::tstring strReaPath;
 
@@ -72,83 +222,163 @@ bool CAuthorityChecker::UserRunAsAdmin(const std::tstring& strPath)
 	{
 		return false;
 	}
-	ShellExecute(0, _T("runas"), strReaPath.c_str(), 0, 0, SW_SHOWNORMAL);
-
-	return true;
+	return ShellExecExt(hWnd, _T("runas"), strReaPath.c_str(), strParameters.c_str(), strDirectory.c_str());
 }
 
 
-bool CAuthorityChecker::AdminRunAsUser(const std::tstring& strPath)
+BOOL CAuthorityChecker::AdminRunAsUser(const HWND hWnd, const std::tstring& strPath, const std::tstring& strParameters, const std::tstring& strDirectory)
 {
-	bool bRet;
-	HANDLE hProcess;
-	HANDLE hToken = NULL;
-	HANDLE hNewToken = NULL;
-	PSID pIntegritySid = NULL;
-	TOKEN_MANDATORY_LABEL tml;
-	SID_IDENTIFIER_AUTHORITY MLAuthority = SECURITY_MANDATORY_LABEL_AUTHORITY;
-
-	STARTUPINFO Si = {0};
-	PROCESS_INFORMATION Pi = {0};
-	Si.cb = sizeof(Si);
-
+	HRESULT hr = 0;
+	UUID guid;
+	TCHAR pszTaskName[MAX_PATH ] = _T("AdminRunAsUser Task");
+	ITaskServiceHelper iService;
 	std::tstring strReaPath;
+
+	if (UuidCreate(&guid) == RPC_S_OK)
+	{
+#ifdef UNICODE
+		swprintf_s(pszTaskName, MAX_PATH - 1, _T("{%08X-%04X-%04x-%02X%02X-%02X%02X%02X%02X%02X%02X}")
+			, guid.Data1
+			, guid.Data2 
+			, guid.Data3 
+			, guid.Data4[0], guid.Data4[1]
+			, guid.Data4[2], guid.Data4[3], guid.Data4[4], guid.Data4[5]
+			, guid.Data4[6], guid.Data4[7]);
+#else
+		sprintf_s(pszTaskName, MAX_PATH - 1, _T("{%08X-%04X-%04x-%02X%02X-%02X%02X%02X%02X%02X%02X}")
+			, guid.Data1
+			, guid.Data2
+			, guid.Data3
+			, guid.Data4[0], guid.Data4[1]
+			, guid.Data4[2], guid.Data4[3], guid.Data4[4], guid.Data4[5]
+			, guid.Data4[6], guid.Data4[7]);
+#endif
+	}
+	
+
 	if (GetFileRealPath(strPath, strReaPath) == false)
 	{
 		return false;
 	}
 
-	hProcess = GetCurrentProcess();
-	if (hProcess == NULL)
+	CoInitialize(NULL);
+	DO(hr = CoCreateInstance(CLSID_TaskScheduler,
+		NULL,
+		CLSCTX_INPROC_SERVER,
+		IID_ITaskService,
+		(void**)&iService.p))
+
+	DO(iService.p->Connect(_variant_t(), _variant_t(), _variant_t(), _variant_t()))
+	ITaskFolderHelper iRootFolder;
+	DO(iService.p->GetFolder(_bstr_t(L"\\"), &iRootFolder.p))
+	iRootFolder.p->DeleteTask(_bstr_t(pszTaskName), 0); 
+	ITaskDefinitionHelper iTask;
+	DO(iService.p->NewTask(0, &iTask.p))
+	IRegistrationInfoHelper iRegInfo;
+	DO(iTask.p->get_RegistrationInfo(&iRegInfo.p))
+	DO(iRegInfo.p->put_Author(L"AdminRunAsUser"))
+	IPrincipalHelper iPrincipal;
+	DO(iTask.p->get_Principal(&iPrincipal.p))
+	DO(iPrincipal.p->put_Id(_bstr_t(L"AdminRunAsUser_Principal")))
+	DO(iPrincipal.p->put_LogonType(TASK_LOGON_INTERACTIVE_TOKEN))
+	DO(iPrincipal.p->put_RunLevel(TASK_RUNLEVEL_LUA))
+	ITaskSettingsHelper iSettings;
+	DO(iTask.p->get_Settings(&iSettings.p))
+	DO(iSettings.p->put_StartWhenAvailable(VARIANT_BOOL(true)))
+	ITriggerCollectionHelper iTriggerCollection;
+	DO(iTask.p->get_Triggers(&iTriggerCollection.p))
+	ITriggerHelper iTrigger;
+	DO(iTriggerCollection.p->Create(TASK_TRIGGER_REGISTRATION, &iTrigger.p))
+	IRegistrationTriggerHelper iRegistrationTrigger;
+	DO(iTrigger.p->QueryInterface(IID_IRegistrationTrigger, (void**)&iRegistrationTrigger.p))
+	DO(iRegistrationTrigger.p->put_Id(_bstr_t(L"AdminRunAsUser_Trigger")))
+	DO(iRegistrationTrigger.p->put_Delay(L"PT0S"))
+	IActionCollectionHelper iActionCollection;
+	DO(iTask.p->get_Actions(&iActionCollection.p))
+	IActionHelper iAction;
+	DO(iActionCollection.p->Create(TASK_ACTION_EXEC, &iAction.p))
+	IExecActionHelper iExecAction;
+	DO(iAction.p->QueryInterface(IID_IExecAction, (void**)&iExecAction.p))
+	DO(iExecAction.p->put_Path(_bstr_t(strReaPath.c_str())))
+	if (strParameters.length())
 	{
-		return false;
+		DO(iExecAction.p->put_Arguments(_bstr_t(strParameters.c_str())))
 	}
-
-	bRet = OpenProcessToken(hProcess, TOKEN_DUPLICATE | TOKEN_QUERY | TOKEN_ADJUST_DEFAULT | TOKEN_ASSIGN_PRIMARY, &hToken);
-	if (bRet == false)
+	if (strDirectory.length())
 	{
-		CloseHandle(hProcess);
-		return false;
+		DO(iExecAction.p->put_WorkingDirectory(_bstr_t(strDirectory.c_str())))
 	}
+	IRegisteredTaskHelper iRegisteredTask;
 
-	bRet = DuplicateTokenEx(hToken, 0, NULL, SecurityImpersonation,TokenPrimary, &hNewToken);
-	CloseHandle(hProcess);
-	CloseHandle(hToken);
-	if (bRet == false)
+	DO(iRootFolder.p->RegisterTaskDefinition(_bstr_t(pszTaskName),iTask.p,TASK_CREATE_OR_UPDATE,_variant_t(),_variant_t(),TASK_LOGON_INTERACTIVE_TOKEN,	_variant_t(L""),&iRegisteredTask.p))
+
+
+	if (iRootFolder.p != NULL)
 	{
-		return false;
+		iRootFolder.p->Release();
+		iRootFolder.p = NULL;
 	}
-
-	// 创建一个低权限的SID
-	bRet = AllocateAndInitializeSid(&MLAuthority, 1, SECURITY_MANDATORY_MEDIUM_RID, 0, 0, 0, 0, 0, 0, 0, &pIntegritySid);
-	if (bRet == false)
+	if (iTask.p != NULL)
 	{
-		CloseHandle(hNewToken);
-		return false;
-	}
-	tml.Label.Attributes = SE_GROUP_INTEGRITY;
-	tml.Label.Sid = pIntegritySid;
-
-	// 设置这个低权限SID到令牌
-	bRet = SetTokenInformation(hNewToken, TokenIntegrityLevel, &tml, (sizeof(tml) + GetLengthSid(pIntegritySid)));
-	if (bRet == false)
+		iTask.p->Release();
+		iTask.p = NULL;
+	}		
+	if (iRegInfo.p != NULL)
 	{
-		CloseHandle(hNewToken);
-		FreeSid(pIntegritySid);
-		return false;
+		iRegInfo.p->Release();
+		iRegInfo.p = NULL;
+	}	
+	if (iPrincipal.p != NULL)
+	{
+		iPrincipal.p->Release();
+		iPrincipal.p = NULL;
+	}		
+	if (iSettings.p != NULL)
+	{
+		iSettings.p->Release();
+		iSettings.p = NULL;
 	}
-
-	// 创建一个低权限的进程
-	bRet = CreateProcessAsUser(hNewToken, strReaPath.c_str(),
-		NULL, NULL, NULL, FALSE, NORMAL_PRIORITY_CLASS | CREATE_NEW_CONSOLE | CREATE_UNICODE_ENVIRONMENT, NULL, NULL, &Si, &Pi);
-
-	CloseHandle(hNewToken);
-	FreeSid(pIntegritySid);
-	return bRet;
+	if (iTriggerCollection.p != NULL)
+	{
+		iTriggerCollection.p->Release();
+		iTriggerCollection.p = NULL;
+	}
+	if (iTrigger.p != NULL)
+	{
+		iTrigger.p->Release();
+		iTrigger.p = NULL;
+	}
+	if (iRegistrationTrigger.p != NULL)
+	{
+		iRegistrationTrigger.p->Release();
+		iRegistrationTrigger.p = NULL;
+	}
+	if (iActionCollection.p != NULL)
+	{
+		iActionCollection.p->Release();
+		iActionCollection.p = NULL;
+	}
+	if (iAction.p != NULL)
+	{
+		iAction.p->Release();
+		iAction.p = NULL;
+	}
+	if (iExecAction.p != NULL)
+	{
+		iExecAction.p->Release();
+		iExecAction.p = NULL;
+	}
+	if (iRegisteredTask.p != NULL)
+	{
+		iRegisteredTask.p->Release();
+		iRegisteredTask.p = NULL;
+	}
+	CoUninitialize();
+	return TRUE;
 }
 
 
-bool CAuthorityChecker::RunAsSelf(const std::tstring& strPath)
+BOOL CAuthorityChecker::RunAsSelf(const HWND hWnd, const std::tstring& strPath, const std::tstring& strParameters, const std::tstring& strDirectory)
 {
 	std::tstring strReaPath;
 	if (GetFileRealPath(strPath, strReaPath) == false)
@@ -156,8 +386,7 @@ bool CAuthorityChecker::RunAsSelf(const std::tstring& strPath)
 		return false;
 	}
 
-	ShellExecute(0, _T("open"), strReaPath.c_str(), 0, 0, SW_SHOWNORMAL);
-	return false;
+	return ShellExecExt(hWnd, _T("open"), strReaPath.c_str(), strParameters.c_str(), strDirectory.c_str());
 }
 
 
@@ -199,36 +428,23 @@ bool CAuthorityChecker::GetFileRealPath(const std::tstring& strSrcPath, std::tst
 }
 
 
-DWORD CAuthorityChecker::GetProcessIdFromProcessName(const std::tstring& strName)
+BOOL CAuthorityChecker::ShellExecExt(HWND hwnd,LPCTSTR pszVerb,LPCTSTR pszPath,LPCTSTR pszParameters ,LPCTSTR pszDirectory)
 {
-	BOOL status;
-	HANDLE snapshot;
-	PROCESSENTRY32 processinfo;
+	SHELLEXECUTEINFO shex;
 
-	processinfo.dwSize = sizeof(processinfo);
-	snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-	if (snapshot == NULL)
-	{
-		CloseHandle(snapshot);
-		return FALSE;
-	}
+	memset(&shex, 0, sizeof(shex));
 
-	status = Process32First(snapshot, &processinfo);
-	while (status)
-	{
-		if(strName.compare(processinfo.szExeFile) ==0)
-		{
-			CloseHandle(snapshot);
-			return processinfo.th32ProcessID;
-		}
-			
-		status = Process32Next(snapshot, &processinfo);
-	}
+	shex.cbSize = sizeof(SHELLEXECUTEINFO);
+	shex.fMask = 0;
+	shex.hwnd = hwnd;
+	shex.lpVerb = pszVerb;
+	shex.lpFile = pszPath;
+	shex.lpParameters = pszParameters;
+	shex.lpDirectory = pszDirectory;
+	shex.nShow = SW_NORMAL;
 
-	CloseHandle(snapshot);
-	return -1;
+	return ::ShellExecuteEx(&shex);
 }
-
 
 CAuthorityChecker::CAuthorityChecker()
 {

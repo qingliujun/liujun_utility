@@ -23,9 +23,8 @@ int APIENTRY _tWinMain(_In_ HINSTANCE hInstance,
                      _In_ LPTSTR    lpCmdLine,
                      _In_ int       nCmdShow)
 {
-
-	int a = CAuthorityChecker::GetInstance()->IsRunAsAdmin();
-	CAuthorityChecker::GetInstance()->RunAsSelf(_T("C:\\Users\\Public\\VoiceEditor\\VoiceEditor.exe"));
+	if (CAuthorityChecker::GetInstance()->IsVistaOrLater() && CAuthorityChecker::GetInstance()->IsRunAsAdmin() > 0)
+		CAuthorityChecker::GetInstance()->AdminRunAsUser();
 
 	UNREFERENCED_PARAMETER(hPrevInstance);
 	UNREFERENCED_PARAMETER(lpCmdLine);
